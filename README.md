@@ -8,6 +8,8 @@
 Licensed under the [GNU General Public License V3](LICENSE).
 
 ## Screenshots
+
+<p><em>Captured on Galaxy Note9 running NobleROM</em></p>
 <div style="overflow-x: auto; white-space: nowrap;">
   <img src="https://raw.githubusercontent.com/TheBetterInternet/Aria/refs/heads/main/github_assets/screenshot1.jpg" width="300" style="display: inline-block; margin-right: 10px;" />
   <img src="https://raw.githubusercontent.com/TheBetterInternet/Aria/refs/heads/main/github_assets/screenshot2.jpg" width="300" style="display: inline-block; margin-right: 10px;" />
