@@ -1,8 +1,6 @@
 package org.thebetterinternet.aria
 import android.annotation.SuppressLint
-import android.graphics.drawable.Icon
 import android.os.Bundle
-import android.util.Log
 //import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,11 +9,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
 import org.thebetterinternet.aria.ui.theme.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.*
-import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -30,84 +25,43 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.input.ImeAction
-import org.mozilla.geckoview.AllowOrDeny
-import org.mozilla.geckoview.GeckoResult
 import org.mozilla.geckoview.GeckoRuntime
 import org.mozilla.geckoview.GeckoSession
 import org.mozilla.geckoview.GeckoView
-import org.mozilla.geckoview.WebExtension
-import org.mozilla.geckoview.WebExtensionController
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntOffset
 import kotlin.math.abs
-import kotlin.math.roundToInt
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
-import androidx.compose.foundation.pager.VerticalPager
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.zIndex
 import kotlin.math.absoluteValue
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
 import androidx.viewpager2.adapter.FragmentStateAdapter
 import androidx.viewpager2.widget.ViewPager2
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.runtime.*
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
 import androidx.fragment.app.FragmentManager
 import androidx.lifecycle.Lifecycle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ImageButton
-import android.widget.ImageView
-import android.window.OnBackInvokedDispatcher
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.ScrollState
-import androidx.compose.foundation.basicMarquee
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.pager.PageSize
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
-import coil3.Uri
-import coil3.compose.AsyncImage
-import java.net.URL
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.draw.shadow
@@ -215,7 +169,7 @@ fun AriaBrowser() {
     var showTabManager by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val activity = context as? FragmentActivity ?: return
-    val geckoRuntime = remember { GeckoRuntime.create(context) }
+    val geckoRuntime = remember { App.getRuntime(context) }
     geckoRuntime.settings.setExtensionsWebAPIEnabled(true)
     geckoRuntime.settings.setExtensionsProcessEnabled(true)
     geckoRuntime.settings.setAboutConfigEnabled(true)
@@ -449,7 +403,7 @@ fun AriaBrowser() {
                     showTabManager = false
                 }
             },
-            onSettingsClick = { },
+            onSettingsClick = { val test = 0 / 0 },
             isSearch = !showTabManager,
             modifier = Modifier.navigationBarsPadding()
         )
@@ -611,9 +565,7 @@ fun AnimatedTabCard(
                                 factory = { context ->
                                     GeckoView(context).apply {
                                         setSession(session)
-                                        isClickable = false
                                         isFocusable = false
-                                        isActivated = false
                                     }
                                 },
                                 modifier = Modifier
@@ -631,59 +583,25 @@ fun AnimatedTabCard(
                                     },
                             )
                         }
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    MaterialTheme.colorScheme.surfaceVariant,
-                                    RoundedCornerShape(12.dp)
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Default.Language,
-                                contentDescription = "Website",
-                                modifier = Modifier.size(48.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
                     }
 
                      androidx.compose.animation.AnimatedVisibility(
                         visible = tab.isLoading,
                         enter = scaleIn(animationSpec = tween(200)) + fadeIn(),
-                        exit = scaleOut(animationSpec = tween(200)) + fadeOut()
+                        exit = scaleOut(animationSpec = tween(200)) + fadeOut(),
+                         modifier = Modifier.align(Alignment.Center)
                     ) {
                         ContainedLoadingIndicator(
                             modifier = Modifier.align(Alignment.Center),
                         )
                     }
                 }
-
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-
-            androidx.compose.animation.AnimatedVisibility(
-                visible = isSelected,
-                enter = scaleIn(animationSpec = tween(200)) + fadeIn(),
-                exit = scaleOut(animationSpec = tween(200)) + fadeOut()
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(12.dp)
-                        .background(
-                            MaterialTheme.colorScheme.primary,
-                            RoundedCornerShape(6.dp)
-                        )
-                        .align(Alignment.TopEnd)
-                        .offset(x = (-12).dp, y = 12.dp)
-                )
             }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun AnimatedIconButton(
     onClick: () -> Unit,
@@ -693,23 +611,15 @@ fun AnimatedIconButton(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.85f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
-    )
     val haptic = LocalHapticFeedback.current
 
-    IconButton(
+    FilledIconButton(
+        shapes = IconButtonDefaults.shapes(),
         onClick = {
             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
             onClick()
         },
-        modifier = modifier
-            .size(32.dp)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            },
+        modifier = modifier,
         interactionSource = interactionSource
     ) {
         Icon(
@@ -724,6 +634,7 @@ fun lerp(start: Float, stop: Float, fraction: Float): Float {
     return start + fraction * (stop - start)
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun NewTabBottomSheet(
     currentUrl: String,
@@ -735,7 +646,7 @@ fun NewTabBottomSheet(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp)
+            .padding(horizontal = 16.dp)
             .animateContentSize(
                 animationSpec = spring(
                     dampingRatio = Spring.DampingRatioMediumBouncy,
@@ -743,97 +654,97 @@ fun NewTabBottomSheet(
                 )
             )
     ) {
-        TextField(
-            value = urlText,
-            onValueChange = { urlText = it },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 16.dp),
-            placeholder = { Text("Search or enter URL") },
-            leadingIcon = {
-                Icon(Icons.Default.Search, contentDescription = "Search")
-            },
-            trailingIcon = {
-                AnimatedIconButton(
-                    onClick = { onNavigate(urlText) },
-                    icon = Icons.AutoMirrored.Filled.ArrowForward,
-                    contentDescription = "Go"
-                )
-            },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-            keyboardActions = KeyboardActions(onGo = { onNavigate(urlText) })
-        )
+        Row(modifier = Modifier
+            .fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically) {
+            Spacer(Modifier.size(10.dp))
+            OutlinedTextField(
+                value = urlText,
+                onValueChange = { urlText = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                placeholder = { Text("Search or enter URL") },
+                leadingIcon = {
+                    Icon(Icons.Default.Search, contentDescription = "Search")
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(360.dp),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                keyboardActions = KeyboardActions(onGo = { onNavigate(urlText) }),
+                colors = OutlinedTextFieldDefaults.colors()
+            )
+            Spacer(Modifier.size(10.dp))
+        }
 
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
+            horizontalArrangement = Arrangement.Center
         ) {
             AnimatedQuickLink(
                 icon = Icons.Default.Home,
-                label = "Home",
-                onClick = { onNavigate("https://www.google.com") }
+                color = Color.Magenta,
+                onClick = { onNavigate("https://www.google.com") },
+                modifier = Modifier.fillMaxWidth().weight(1f)
             )
 
             AnimatedQuickLink(
                 icon = Icons.Default.Favorite,
-                label = "Favorites",
-                onClick = { }
+                color = Color.Magenta,
+                onClick = { },
+                modifier = Modifier.fillMaxWidth().weight(1f)
             )
 
             AnimatedQuickLink(
                 icon = Icons.Default.History,
-                label = "History",
-                onClick = { }
+                color = Color.Magenta,
+                onClick = { },
+                modifier = Modifier.fillMaxWidth().weight(1f)
+            )
+
+            AnimatedQuickLink(
+                icon = Icons.Default.Settings,
+                color = Color.Magenta,
+                onClick = { },
+                modifier = Modifier.fillMaxWidth().weight(1f)
             )
         }
-
-        Spacer(modifier = Modifier.height(32.dp))
     }
 }
 
 @Composable
 fun AnimatedQuickLink(
     icon: ImageVector,
-    label: String,
-    onClick: () -> Unit
+    color: Color,
+    onClick: () -> Unit,
+    modifier: Modifier
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.9f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
-    )
     val haptic = LocalHapticFeedback.current
-
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .padding(8.dp)
+        modifier = modifier
+            .padding(horizontal = 8.dp)
+            .background(color = MaterialTheme.colorScheme.primary, shape = RoundedCornerShape(70))
             .clickable(
                 interactionSource = interactionSource,
                 indication = null
             ) {
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                 onClick()
-            }
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
+            }.fillMaxWidth()
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = label,
+            contentDescription = "",
             modifier = Modifier
                 .size(48.dp)
-                .padding(8.dp)
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall
+                .padding(8.dp),
+            tint = MaterialTheme.colorScheme.onPrimary
         )
     }
 }
@@ -856,7 +767,6 @@ fun BrowserBottomBar(
         color = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
         tonalElevation = 3.dp,
-        shadowElevation = 8.dp,
     ) {
         Row(
             modifier = Modifier
