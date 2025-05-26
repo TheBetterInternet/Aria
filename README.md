@@ -7,6 +7,8 @@
 **Aria** is a beautifully-designed, privacy-focused Android browser built with Kotlin and Jetpack Compose.
 Licensed under the [GNU General Public License V3](LICENSE).
 
+[![Download Latest Nightly](https://img.shields.io/badge/Latest-Nightly-blueviolet?logo=android&style=for-the-badge)](https://nightly.link/TheBetterInternet/Aria/workflows/android/main)
+
 ## Screenshots
 
 <p><em>Captured on Galaxy Note9 running NobleROM</em></p>
