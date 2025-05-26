@@ -63,6 +63,3 @@ jobs:
         with:
           name: app-x86
           path: app/build/outputs/apk/release/app-x86-release.apk
-
-      - name: List outputs
-        run: tree -f app/build/outputs/release
