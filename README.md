@@ -2,13 +2,11 @@
   <img alt="Aria" height="150" src="https://raw.githubusercontent.com/TheBetterInternet/Aria/refs/heads/main/app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp">
   <h1>Aria</h1>
   <p><em>Your new favorite browser.</em></p>
+  <a href="https://nightly.link/TheBetterInternet/Aria/workflows/android/main"><img alt="Download Latest Nightly" src="https://img.shields.io/badge/Install-Nightly%20APK-blueviolet?logo=android&style=for-the-badge"></img></a>
 </div>
 
 **Aria** is a beautifully-designed, privacy-focused Android browser built with Kotlin and Jetpack Compose.
 Licensed under the [GNU General Public License V3](LICENSE).
-<div align="center">
-<a href="https://nightly.link/TheBetterInternet/Aria/workflows/android/main"><img alt="Download Latest Nightly" src="https://img.shields.io/badge/Install-Nightly%20APK-blueviolet?logo=android&style=for-the-badge"></img></a>
-</div>
 
 ## Screenshots
 
