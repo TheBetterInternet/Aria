@@ -1,7 +1,9 @@
 package org.thebetterinternet.aria
+import android.animation.ObjectAnimator
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.os.Bundle
-//import androidx.activity.ComponentActivity
+import android.util.Patterns
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
@@ -58,7 +60,9 @@ import androidx.lifecycle.Lifecycle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.window.SplashScreen
 import androidx.activity.compose.BackHandler
+import androidx.activity.viewModels
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
@@ -68,7 +72,8 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
-
+import kotlinx.coroutines.launch
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 data class BrowserTab(
     val id: String = java.util.UUID.randomUUID().toString(),
     val title: String = "New Tab",
@@ -81,16 +86,26 @@ data class BrowserTab(
 
 class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
+        val intentUrl = handleIncomingIntent(intent)
         setContent {
             AriaTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    AriaBrowser()
+                    AriaBrowser(initialUrl = intentUrl)
                 }
             }
+        }
+    }
+    private fun handleIncomingIntent(intent: Intent): String? {
+        return when (intent.action) {
+            Intent.ACTION_VIEW -> {
+                intent.data?.toString()
+            }
+            else -> null
         }
     }
 }
@@ -162,7 +177,7 @@ class TabFragment : Fragment() {
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun AriaBrowser() {
+fun AriaBrowser(initialUrl: String?) {
     var tabs by remember { mutableStateOf(listOf<BrowserTab>()) }
     var currentTabIndex by remember { mutableStateOf(0) }
     var showBottomSheet by remember { mutableStateOf(false) }
@@ -177,17 +192,18 @@ fun AriaBrowser() {
     geckoRuntime.webExtensionController.enableExtensionProcessSpawning()
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
     val swipeRefreshState = rememberPullToRefreshState()
-
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) {
         if (tabs.isEmpty()) {
+            val url = initialUrl ?: "https://www.google.com"
             val initialSession = GeckoSession().apply { open(geckoRuntime) }
-            tabs = listOf(BrowserTab(geckoSession = initialSession))
+            tabs = listOf(BrowserTab(geckoSession = initialSession, url = url))
         }
     }
 
     val currentTab = if (tabs.isNotEmpty() && currentTabIndex < tabs.size) tabs[currentTabIndex] else null
     val currentSession = currentTab?.geckoSession
-
     LaunchedEffect(currentSession) {
         currentSession?.let { session ->
             session.navigationDelegate = object : GeckoSession.NavigationDelegate {
@@ -308,7 +324,6 @@ fun AriaBrowser() {
             ) {
                 Box(modifier = Modifier.fillMaxSize()) {
                     var viewPager: ViewPager2? by remember { mutableStateOf(null) }
-
                     AndroidView(
                         factory = { ctx ->
                             ViewPager2(ctx).apply {
@@ -380,6 +395,7 @@ fun AriaBrowser() {
             }
         }
 
+        SnackbarHost(hostState = snackbarHostState)
         BrowserBottomBar(
             tabCount = tabs.size,
             onTabsClick = { showTabManager = !showTabManager },
@@ -403,7 +419,7 @@ fun AriaBrowser() {
                     showTabManager = false
                 }
             },
-            onSettingsClick = { val test = 0 / 0 },
+            onSettingsClick = {  }, //TODO
             isSearch = !showTabManager,
             modifier = Modifier.navigationBarsPadding()
         )
@@ -426,6 +442,13 @@ fun AriaBrowser() {
                     tabs = tabs + BrowserTab(geckoSession = newSession)
                     currentTabIndex = tabs.size - 1
                     showBottomSheet = false
+                },
+                onInvaildUrl = { url ->
+                    scope.launch {
+                        snackbarHostState.showSnackbar("Invalid link! Searching instead")
+                    }
+                    showBottomSheet = false
+                    currentSession?.loadUri("https://google.com/search?q=$url")
                 }
             )
         }
@@ -473,7 +496,7 @@ fun TabManager(
                         rotationY = pageOffset * 15f
                     }
             ) {
-                AnimatedTabCard(
+                TabCard(
                     tab = tab,
                     isSelected = pageIndex == currentTabIndex,
                     onTabClick = { onTabSelected(pageIndex) },
@@ -489,7 +512,7 @@ fun TabManager(
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun AnimatedTabCard(
+fun TabCard(
     tab: BrowserTab,
     isSelected: Boolean,
     onTabClick: () -> Unit,
@@ -545,7 +568,7 @@ fun AnimatedTabCard(
                         )
                     }
 
-                    AnimatedIconButton(
+                    IconButton(
                         onClick = onCloseClick,
                         icon = Icons.Default.Close,
                         contentDescription = "Close Tab"
@@ -603,7 +626,7 @@ fun AnimatedTabCard(
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun AnimatedIconButton(
+fun IconButton(
     onClick: () -> Unit,
     icon: ImageVector,
     contentDescription: String,
@@ -639,7 +662,8 @@ fun lerp(start: Float, stop: Float, fraction: Float): Float {
 fun NewTabBottomSheet(
     currentUrl: String,
     onNavigate: (String) -> Unit,
-    onNewTab: () -> Unit
+    onNewTab: () -> Unit,
+    onInvaildUrl: (String) -> Unit
 ) {
     var urlText by remember { mutableStateOf(currentUrl) }
 
@@ -658,7 +682,7 @@ fun NewTabBottomSheet(
             .fillMaxWidth(),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically) {
-            Spacer(Modifier.size(10.dp))
+            Spacer(Modifier.size(5.dp))
             OutlinedTextField(
                 value = urlText,
                 onValueChange = { urlText = it },
@@ -672,10 +696,13 @@ fun NewTabBottomSheet(
                 singleLine = true,
                 shape = RoundedCornerShape(360.dp),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-                keyboardActions = KeyboardActions(onGo = { onNavigate(urlText) }),
+                keyboardActions = KeyboardActions(onGo = {
+                    val isUrl = Patterns.WEB_URL.matcher(urlText).matches()
+                    if (isUrl) { onNavigate(urlText) } else { onInvaildUrl(urlText) }
+                }),
                 colors = OutlinedTextFieldDefaults.colors()
             )
-            Spacer(Modifier.size(10.dp))
+            Spacer(Modifier.size(5.dp))
         }
 
         Row(
@@ -684,30 +711,26 @@ fun NewTabBottomSheet(
                 .padding(vertical = 8.dp),
             horizontalArrangement = Arrangement.Center
         ) {
-            AnimatedQuickLink(
+            QuickLink(
                 icon = Icons.Default.Home,
-                color = Color.Magenta,
                 onClick = { onNavigate("https://www.google.com") },
                 modifier = Modifier.fillMaxWidth().weight(1f)
             )
 
-            AnimatedQuickLink(
+            QuickLink(
                 icon = Icons.Default.Favorite,
-                color = Color.Magenta,
                 onClick = { },
                 modifier = Modifier.fillMaxWidth().weight(1f)
             )
 
-            AnimatedQuickLink(
+            QuickLink(
                 icon = Icons.Default.History,
-                color = Color.Magenta,
                 onClick = { },
                 modifier = Modifier.fillMaxWidth().weight(1f)
             )
 
-            AnimatedQuickLink(
+            QuickLink(
                 icon = Icons.Default.Settings,
-                color = Color.Magenta,
                 onClick = { },
                 modifier = Modifier.fillMaxWidth().weight(1f)
             )
@@ -715,36 +738,31 @@ fun NewTabBottomSheet(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun AnimatedQuickLink(
+fun QuickLink(
     icon: ImageVector,
-    color: Color,
     onClick: () -> Unit,
     modifier: Modifier
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
     val haptic = LocalHapticFeedback.current
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
+    Button(
+        interactionSource = interactionSource,
+        shapes = ButtonDefaults.shapes(),
+        onClick = {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            onClick()
+        },
         modifier = modifier
             .padding(horizontal = 8.dp)
-            .background(color = MaterialTheme.colorScheme.primary, shape = RoundedCornerShape(70))
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null
-            ) {
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                onClick()
-            }.fillMaxWidth()
+            .fillMaxWidth()
     ) {
         Icon(
             imageVector = icon,
             contentDescription = "",
             modifier = Modifier
-                .size(48.dp)
-                .padding(8.dp),
-            tint = MaterialTheme.colorScheme.onPrimary
+                .size(30.dp)
         )
     }
 }
@@ -761,7 +779,7 @@ fun BrowserBottomBar(
     modifier: Modifier = Modifier
 ) {
     var lastClickTime by remember { mutableStateOf(0L) }
-    val doubleClickThreshold = 500L // (ms) btw
+    val doubleClickThreshold = 1000L // (ms) btw
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface,

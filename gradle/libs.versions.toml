@@ -6,6 +6,7 @@ androidxJunit = "1.2.1"
 coilCompose = "3.2.0"
 composeBomVersion = "2025.05.01"
 coreKtxVersion = "1.16.0"
+coreSplashscreen = "1.2.0-beta02"
 espressoCoreVersion = "3.6.1"
 geckoview = "138.0.20250517143237"
 kotlin = "2.0.21"
@@ -28,6 +29,7 @@ androidx-activity-compose-v182 = { module = "androidx.activity:activity-compose"
 androidx-compose-bom-v20250501 = { module = "androidx.compose:compose-bom", version.ref = "composeBomVersion" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-core-ktx-v1160 = { module = "androidx.core:core-ktx", version.ref = "coreKtxVersion" }
+androidx-core-splashscreen = { module = "androidx.core:core-splashscreen", version.ref = "coreSplashscreen" }
 androidx-espresso-core-v361 = { module = "androidx.test.espresso:espresso-core", version.ref = "espressoCoreVersion" }
 androidx-junit-v121 = { module = "androidx.test.ext:junit", version.ref = "androidxJunit" }
 androidx-lifecycle-runtime-ktx-v270 = { module = "androidx.lifecycle:lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtxVersion" }

@@ -11,7 +11,6 @@ import kotlin.system.exitProcess
 class App : Application() {
     companion object {
         private var runtime: GeckoRuntime? = null
-
         fun getRuntime(context: Context): GeckoRuntime {
             if (runtime == null) {
                 val settings = GeckoRuntimeSettings.Builder()

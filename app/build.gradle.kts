@@ -98,6 +98,7 @@ android {
         implementation(libs.androidx.viewpager2)
         implementation(libs.androidx.lifecycle.viewmodel.compose.android)
         implementation(libs.coil.compose)
+        implementation(libs.androidx.core.splashscreen)
         testImplementation(libs.junit)
         androidTestImplementation(libs.androidx.junit.v121)
         androidTestImplementation(libs.androidx.espresso.core.v361)

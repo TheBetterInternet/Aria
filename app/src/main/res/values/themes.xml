@@ -2,4 +2,10 @@
 <resources>
 
     <style name="Theme.Aria" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.Aria.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@drawable/splashscreen_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/splashscreen</item>
+        <item name="windowSplashScreenAnimationDuration">1000</item>
+        <item name="postSplashScreenTheme">@style/Theme.Aria</item>
+    </style>
 </resources>
