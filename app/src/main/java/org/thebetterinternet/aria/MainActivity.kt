@@ -1,8 +1,12 @@
 package org.thebetterinternet.aria
 import android.animation.ObjectAnimator
 import android.annotation.SuppressLint
+import android.app.DownloadManager
+import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.os.Environment
 import android.util.Patterns
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
@@ -68,12 +72,20 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.core.content.ContextCompat.getSystemService
 import kotlinx.coroutines.launch
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import org.mozilla.geckoview.WebResponse
+import androidx.core.net.toUri
+
 data class BrowserTab(
     val id: String = java.util.UUID.randomUUID().toString(),
     val title: String = "New Tab",
@@ -179,9 +191,10 @@ class TabFragment : Fragment() {
 @Composable
 fun AriaBrowser(initialUrl: String?) {
     var tabs by remember { mutableStateOf(listOf<BrowserTab>()) }
-    var currentTabIndex by remember { mutableStateOf(0) }
+    var currentTabIndex by remember { mutableIntStateOf(0) }
     var showBottomSheet by remember { mutableStateOf(false) }
     var showTabManager by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val activity = context as? FragmentActivity ?: return
     val geckoRuntime = remember { App.getRuntime(context) }
@@ -206,6 +219,16 @@ fun AriaBrowser(initialUrl: String?) {
     val currentSession = currentTab?.geckoSession
     LaunchedEffect(currentSession) {
         currentSession?.let { session ->
+            session.contentDelegate = object : GeckoSession.ContentDelegate {
+                override fun onExternalResponse(session: GeckoSession, response: WebResponse) {
+                    if (!response.requestExternalApp) {
+                        startDownload(context, response.uri, extractFilename(response) ?: "download")
+                        //TODO: show snackbar
+                    } else {
+                        //TODO: open in external app
+                    }
+                }
+            }
             session.navigationDelegate = object : GeckoSession.NavigationDelegate {
                 override fun onLocationChange(
                     session: GeckoSession,
@@ -377,7 +400,7 @@ fun AriaBrowser(initialUrl: String?) {
                         PullToRefreshBox(
                             state = swipeRefreshState,
                             onRefresh = { currentSession?.reload() },
-                            isRefreshing = true,
+                            isRefreshing = currentTab!!.isLoading,
                             modifier = Modifier.fillMaxSize(),
                             indicator = {
                                 Box(
@@ -419,7 +442,7 @@ fun AriaBrowser(initialUrl: String?) {
                     showTabManager = false
                 }
             },
-            onSettingsClick = {  }, //TODO
+            onSettingsClick = { showSettings = true },
             isSearch = !showTabManager,
             modifier = Modifier.navigationBarsPadding()
         )
@@ -453,6 +476,17 @@ fun AriaBrowser(initialUrl: String?) {
             )
         }
     }
+
+    if (showSettings) {
+        SettingsPage(
+            onBackClick = { showSettings = false },
+            onPrivacyClick = { /* Navigate to privacy settings */ },
+            onSecurityClick = { /* Navigate to security settings */ },
+            onGeneralClick = { /* Navigate to general settings */ },
+            onAdvancedClick = { /* Navigate to advanced settings */ },
+            onAboutClick = { /* Navigate to about page */ }
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -474,7 +508,7 @@ fun TabManager(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         HorizontalPager(
             state = pagerState,
@@ -484,7 +518,6 @@ fun TabManager(
             val pageOffset = (pagerState.currentPage - pageIndex) + pagerState.currentPageOffsetFraction
             val scale = lerp(0.85f, 0.8f, 0.8f - pageOffset.absoluteValue.coerceAtMost(0.6f))
             val alpha = lerp(0.6f, 1f, 1f - pageOffset.absoluteValue.coerceAtMost(1f))
-
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -503,7 +536,8 @@ fun TabManager(
                     onCloseClick = { onTabClosed(pageIndex) },
                     isCurrentPage = pageIndex == pagerState.currentPage ||
                             (pageIndex == pagerState.currentPage - 1 && pagerState.currentPageOffsetFraction > 0) ||
-                            (pageIndex == pagerState.currentPage + 1 && pagerState.currentPageOffsetFraction < 0)
+                            (pageIndex == pagerState.currentPage + 1 && pagerState.currentPageOffsetFraction < 0),
+                    onRefreshClick = { tab.geckoSession?.reload() }
                 )
             }
         }
@@ -517,6 +551,7 @@ fun TabCard(
     isSelected: Boolean,
     onTabClick: () -> Unit,
     onCloseClick: () -> Unit,
+    onRefreshClick: () -> Unit,
     isCurrentPage: Boolean
 ) {
     val haptic = LocalHapticFeedback.current
@@ -550,29 +585,59 @@ fun TabCard(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
                         Text(
                             text = tab.title,
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Medium,
+                            fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
+                            color = if (isSelected)
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            else MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             text = tab.url,
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = if (isSelected)
+                                MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(top = 4.dp)
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
 
-                    IconButton(
+                    FilledTonalIconButton(
+                        onClick = onRefreshClick,
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        ),
+                        shapes = IconButtonDefaults.shapes()
+                    ) {
+                        Icon(
+                            Icons.Default.Refresh,
+                            contentDescription = "Refresh Tab",
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    FilledTonalIconButton(
                         onClick = onCloseClick,
-                        icon = Icons.Default.Close,
-                        contentDescription = "Close Tab"
-                    )
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer
+                        ),
+                        shapes = IconButtonDefaults.shapes()
+                    ) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "Close Tab",
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
 
                 Box(
@@ -582,7 +647,6 @@ fun TabCard(
                         .padding(horizontal = 8.dp)
                         .clip(RoundedCornerShape(12.dp))
                 ) {
-                    if (isCurrentPage) {
                         tab.geckoSession?.let { session ->
                             AndroidView(
                                 factory = { context ->
@@ -606,13 +670,12 @@ fun TabCard(
                                     },
                             )
                         }
-                    }
 
-                     androidx.compose.animation.AnimatedVisibility(
+                    androidx.compose.animation.AnimatedVisibility(
                         visible = tab.isLoading,
                         enter = scaleIn(animationSpec = tween(200)) + fadeIn(),
                         exit = scaleOut(animationSpec = tween(200)) + fadeOut(),
-                         modifier = Modifier.align(Alignment.Center)
+                        modifier = Modifier.align(Alignment.Center)
                     ) {
                         ContainedLoadingIndicator(
                             modifier = Modifier.align(Alignment.Center),
@@ -670,13 +733,14 @@ fun NewTabBottomSheet(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = 24.dp, vertical = 16.dp)
             .animateContentSize(
                 animationSpec = spring(
                     dampingRatio = Spring.DampingRatioMediumBouncy,
                     stiffness = Spring.StiffnessLow
                 )
-            )
+            ),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Row(modifier = Modifier
             .fillMaxWidth(),
@@ -689,18 +753,30 @@ fun NewTabBottomSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                placeholder = { Text("Search or enter URL") },
+                placeholder = {
+                    Text(
+                        "Search or enter URL",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                },
                 leadingIcon = {
-                    Icon(Icons.Default.Search, contentDescription = "Search")
+                    Icon(
+                        Icons.Default.Search,
+                        contentDescription = "Search",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 },
                 singleLine = true,
-                shape = RoundedCornerShape(360.dp),
+                shape = RoundedCornerShape(28.dp),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
                 keyboardActions = KeyboardActions(onGo = {
                     val isUrl = Patterns.WEB_URL.matcher(urlText).matches()
                     if (isUrl) { onNavigate(urlText) } else { onInvaildUrl(urlText) }
                 }),
-                colors = OutlinedTextFieldDefaults.colors()
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                )
             )
             Spacer(Modifier.size(5.dp))
         }
@@ -748,21 +824,18 @@ fun QuickLink(
     val interactionSource = remember { MutableInteractionSource() }
     val haptic = LocalHapticFeedback.current
     Button(
-        interactionSource = interactionSource,
         shapes = ButtonDefaults.shapes(),
         onClick = {
             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
             onClick()
         },
         modifier = modifier
-            .padding(horizontal = 8.dp)
-            .fillMaxWidth()
+            .padding(horizontal = 4.dp)
     ) {
         Icon(
             imageVector = icon,
             contentDescription = "",
-            modifier = Modifier
-                .size(30.dp)
+            modifier = Modifier.size(24.dp)
         )
     }
 }
@@ -782,34 +855,43 @@ fun BrowserBottomBar(
     val doubleClickThreshold = 1000L // (ms) btw
     Surface(
         modifier = modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
-        tonalElevation = 3.dp,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        tonalElevation = 6.dp,
+        shadowElevation = 8.dp
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(horizontal = 24.dp, vertical = 20.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box {
-                IconButton(onClick = onTabsClick) {
+                FilledTonalIconButton(
+                    onClick = onTabsClick,
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                ) {
                     Icon(Icons.Default.Tab, contentDescription = "Tabs")
                 }
                 if (tabCount > 1) {
                     Surface(
                         modifier = Modifier
-                            .size(16.dp)
-                            .offset(x = 8.dp, y = (-8).dp),
+                            .size(20.dp)
+                            .offset(x = 10.dp, y = (-10).dp),
                         color = MaterialTheme.colorScheme.primary,
-                        shape = RoundedCornerShape(8.dp)
+                        shape = CircleShape,
+                        shadowElevation = 2.dp
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Text(
-                                text = tabCount.toString(),
+                                text = if (tabCount > 99) ":D" else tabCount.toString(),
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onPrimary
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                fontWeight = FontWeight.Bold
                             )
                         }
                     }
@@ -826,16 +908,276 @@ fun BrowserBottomBar(
                         onNewTabClick()
                     }
                 },
-                modifier = Modifier.size(56.dp),
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                elevation = FloatingActionButtonDefaults.elevation(
+                    defaultElevation = 6.dp,
+                    pressedElevation = 12.dp
+                )
             ) {
-                if (!isSearch) Icon(Icons.Default.Add, contentDescription = "New Tab")
-                if (isSearch) Icon(Icons.Default.Search, contentDescription = "Search")
+                Icon(
+                    if (!isSearch) Icons.Default.Add else Icons.Default.Search,
+                    contentDescription = if (!isSearch) "New Tab" else "Search",
+                    modifier = Modifier.size(28.dp)
+                )
             }
 
-            IconButton(onClick = onSettingsClick) {
+            FilledTonalIconButton(
+                onClick = onSettingsClick,
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            ) {
                 Icon(Icons.Default.Settings, contentDescription = "Settings")
             }
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SettingsPage(
+    onBackClick: () -> Unit,
+    onPrivacyClick: () -> Unit,
+    onSecurityClick: () -> Unit,
+    onGeneralClick: () -> Unit,
+    onAdvancedClick: () -> Unit,
+    onAboutClick: () -> Unit
+) {
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+
+    Scaffold(
+        modifier = Modifier
+            .fillMaxSize()
+            .nestedScroll(scrollBehavior.nestedScrollConnection),
+        topBar = {
+            LargeTopAppBar(
+                title = {
+                    Text(
+                        text = "Settings",
+                        style = MaterialTheme.typography.headlineMedium
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBackClick) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back"
+                        )
+                    }
+                },
+                scrollBehavior = scrollBehavior,
+                colors = TopAppBarDefaults.largeTopAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
+            )
+        }
+    ) { paddingValues ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues),
+            contentPadding = PaddingValues(vertical = 8.dp)
+        ) {
+            item {
+                SettingsSection(title = "Browsing") {
+                    SettingsItem(
+                        icon = Icons.Default.Home,
+                        title = "Homepage",
+                        subtitle = "Set your default homepage",
+                        onClick = onGeneralClick
+                    )
+                    SettingsItem(
+                        icon = Icons.Default.Search,
+                        title = "Search Engine",
+                        subtitle = "Choose your default search provider",
+                        onClick = onGeneralClick
+                    )
+                    SettingsItem(
+                        icon = Icons.Default.Download,
+                        title = "Downloads",
+                        subtitle = "Manage download location and behavior",
+                        onClick = onGeneralClick
+                    )
+                }
+            }
+
+            item {
+                SettingsSection(title = "Privacy & Security") {
+                    SettingsItem(
+                        icon = Icons.Default.Shield,
+                        title = "Privacy Settings",
+                        subtitle = "Control data collection and tracking",
+                        onClick = onPrivacyClick
+                    )
+                    SettingsItem(
+                        icon = Icons.Default.Security,
+                        title = "Security",
+                        subtitle = "Manage passwords and security features",
+                        onClick = onSecurityClick
+                    )
+                    SettingsItem(
+                        icon = Icons.Default.Cookie,
+                        title = "Cookies & Site Data",
+                        subtitle = "Manage website data and permissions",
+                        onClick = onPrivacyClick
+                    )
+                }
+            }
+
+            item {
+                SettingsSection(title = "Appearance") {
+                    SettingsItem(
+                        icon = Icons.Default.Palette,
+                        title = "Theme",
+                        subtitle = "Light, Dark, or System default",
+                        onClick = onGeneralClick
+                    )
+                }
+            }
+
+            item {
+                SettingsSection(title = "Advanced") {
+                    SettingsItem(
+                        icon = Icons.Default.Storage,
+                        title = "Site Settings",
+                        subtitle = "Permissions for individual websites",
+                        onClick = onAdvancedClick
+                    )
+                    SettingsItem(
+                        icon = Icons.Default.NetworkCheck,
+                        title = "Network Settings",
+                        subtitle = "Proxy and connection preferences",
+                        onClick = onAdvancedClick
+                    )
+                }
+            }
+
+            item {
+                SettingsSection(title = "About") {
+                    SettingsItem(
+                        icon = Icons.Default.Info,
+                        title = "About Aria",
+                        subtitle = "Version info and about",
+                        onClick = onAboutClick
+                    )
+                    SettingsItem(
+                        icon = Icons.Default.Update,
+                        title = "Check for Updates",
+                        subtitle = "Keep your browser up to date",
+                        onClick = onAboutClick
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SettingsSection(
+    title: String,
+    content: @Composable () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+        )
+        content()
+    }
+}
+
+@Composable
+fun SettingsItem(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true
+) {
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant
+                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                modifier = Modifier.size(24.dp)
+            )
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (enabled) MaterialTheme.colorScheme.onSurface
+                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant
+                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                )
+            }
+        }
+    }
+}
+
+private fun startDownload(context: Context, url: String, filename: String) {
+    val request = DownloadManager.Request(Uri.parse(url))
+        .setTitle(filename)
+        .setDescription("Downloading file...")
+        .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+        .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, filename)
+        .setAllowedOverMetered(true)
+        .setAllowedOverRoaming(true)
+
+    val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+    downloadManager.enqueue(request)
+}
+private fun extractFilename(response: WebResponse): String {
+    response.headers["content-disposition"]?.let { contentDisposition ->
+        val filenameRegex = "filename[*]?\\s*=\\s*[\"']?([^;\"'\\n\\r]+)".toRegex(RegexOption.IGNORE_CASE)
+        filenameRegex.find(contentDisposition)?.groupValues?.get(1)?.let { filename ->
+            return filename.trim()
+        }
+    }
+
+    return extractFilenameFromUrl(response.uri)
+}
+
+private fun extractFilenameFromUrl(url: String): String {
+    return try {
+        val uri = url.toUri()
+        val path = uri.path ?: ""
+        val filename = path.substringAfterLast('/')
+
+        if (filename.isNotEmpty() && filename.contains('.')) {
+            filename
+        } else {
+            "download_${System.currentTimeMillis()}"
+        }
+    } catch (e: Exception) {
+        "download_${System.currentTimeMillis()}"
     }
 }
