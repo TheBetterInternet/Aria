@@ -487,12 +487,6 @@ fun AriaBrowser(initialUrl: String?) {
                     showBottomSheet = false
                     showSettings = true
                 },
-                onNewTab = {
-                    val newSession = GeckoSession().apply { open(geckoRuntime) }
-                    tabs = tabs + BrowserTab(geckoSession = newSession)
-                    currentTabIndex = tabs.size - 1
-                    showBottomSheet = false
-                },
                 onInvaildUrl = { url ->
                     scope.launch {
                         snackbarHostState.showSnackbar("Invalid link! Searching instead")
@@ -500,8 +494,7 @@ fun AriaBrowser(initialUrl: String?) {
                     showBottomSheet = false
                     currentSession?.loadUri(searchEngine.replaceFirst("%s", url))
                 },
-                homePage = homePage,
-                searchEngine = searchEngine
+                homePage = homePage
             )
         }
     }
@@ -748,11 +741,9 @@ fun lerp(start: Float, stop: Float, fraction: Float): Float {
 fun NewTabBottomSheet(
     currentUrl: String,
     onNavigate: (String) -> Unit,
-    onNewTab: () -> Unit,
     onInvaildUrl: (String) -> Unit,
     onSettings: () -> Unit,
     homePage: String,
-    searchEngine: String,
 ) {
     var urlText by remember { if (currentUrl != homePage && currentUrl != "${homePage}/") { mutableStateOf(currentUrl) } else { mutableStateOf("") } }
     Column(
