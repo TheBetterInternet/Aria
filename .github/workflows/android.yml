@@ -36,7 +36,7 @@ jobs:
       - name: Validate Gradle wrapper
         uses: gradle/actions/wrapper-validation@v4
 
-      - name: Build with Gradle (arm64-v8a)
+      - name: Build with Gradle (universal)
         id: gradle_build_release_arm64
         run: ./gradlew assembleRelease
 

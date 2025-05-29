@@ -1,8 +1,10 @@
 package org.thebetterinternet.aria
 import android.annotation.SuppressLint
 import android.app.DownloadManager
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.content.Intent.CATEGORY_BROWSABLE
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -25,6 +27,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PageSize
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -57,6 +60,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.net.toUri
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.fragment.app.Fragment
@@ -73,6 +77,7 @@ import org.mozilla.geckoview.WebResponse
 import org.thebetterinternet.aria.ui.theme.*
 import kotlin.math.abs
 import kotlin.math.absoluteValue
+import androidx.core.content.edit
 
 data class BrowserTab(
     val id: String = java.util.UUID.randomUUID().toString(),
@@ -162,6 +167,7 @@ class TabFragment : Fragment() {
             this.geckoView = geckoView
             geckoView.isNestedScrollingEnabled = true
             geckoView.isVerticalScrollBarEnabled = true
+            geckoView.autofillEnabled = true
             val tab = tabsReference.getOrNull(tabPosition)
             tab?.geckoSession?.let { session ->
                 geckoView.setSession(session)
@@ -187,8 +193,15 @@ fun AriaBrowser(initialUrl: String?) {
     val context = LocalContext.current
     val activity = context as? FragmentActivity ?: return
     val geckoRuntime = remember { App.getRuntime(context) }
-    val homePage = "https://google.com" // placeholder.
-    val searchEngine = "https://google.com/search?q=%s" // placeholder.
+    val prefs = remember {
+        context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+    }
+    val homePage by remember {
+        mutableStateOf(prefs.getString("home", "https://google.com") ?: "https://google.com")
+    }
+    val searchEngine by remember {
+        mutableStateOf(prefs.getString("search", "https://google.com/search?q=%s") ?: "https://google.com/search?q=%s")
+    }
     geckoRuntime.settings.setExtensionsWebAPIEnabled(true)
     geckoRuntime.settings.setExtensionsProcessEnabled(true)
     geckoRuntime.settings.setAboutConfigEnabled(true)
@@ -227,11 +240,14 @@ fun AriaBrowser(initialUrl: String?) {
                         startDownload(context, response.uri, extractFilename(response) ?: "download")
                         scope.launch { snackbarHostState.showSnackbar(message = "Downloading file...") }
                     } else {
-                        val i = Intent(Intent.ACTION_VIEW)
-                        i.data = response.uri.toUri()
-                        i.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                        if (i.resolveActivity(context.packageManager) != null) {
+                        val i = Intent(Intent.ACTION_VIEW, response.uri.toUri()).apply {
+                            addCategory(CATEGORY_BROWSABLE)
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        }
+                        try {
                             context.startActivity(i)
+                        } catch (e: ActivityNotFoundException) {
+                            // do nothing.
                         }
                     }
                 }
@@ -503,12 +519,9 @@ fun AriaBrowser(initialUrl: String?) {
         ) {
         SettingsPage(
             onBackClick = { showSettings = false },
-            onHomepageClick = {},
             onAboutClick = { showAbout = true },
-            onSearchClick = {},
             onUpdateClick = {},
             onDownloadsClick = {},
-            homePage = homePage
         )
         }
     androidx.compose.animation.AnimatedVisibility(
@@ -548,6 +561,8 @@ fun TabManager(
             .background(MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         HorizontalPager(
+            pageSize = PageSize.Fixed(350.dp),
+            reverseLayout = true,
             state = pagerState,
             modifier = Modifier.fillMaxSize(),
         ) { pageIndex ->
@@ -560,10 +575,7 @@ fun TabManager(
                     .fillMaxSize()
                     .padding(vertical = 64.dp)
                     .graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
                         this.alpha = alpha
-                        rotationY = pageOffset * 15f
                     }
             ) {
                 TabCard(
@@ -601,89 +613,91 @@ fun TabCard(
         targetValue = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
         animationSpec = tween(300)
     )
-
-    Card(
-        modifier = Modifier
-            .fillMaxSize()
-            .clickable {
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                onTabClick()
-            }
-            .shadow(elevation = elevation, shape = RoundedCornerShape(16.dp)),
-        border = BorderStroke(2.dp, borderColor),
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Text(
-                            text = tab.title,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            color = if (isSelected)
-                                MaterialTheme.colorScheme.onPrimaryContainer
-                            else MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = tab.url,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (isSelected)
-                                MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-
-                    FilledTonalIconButton(
-                        onClick = onRefreshClick,
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                        ),
-                        shapes = IconButtonDefaults.shapes()
-                    ) {
-                        Icon(
-                            Icons.Default.Refresh,
-                            contentDescription = "Refresh Tab",
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                    FilledTonalIconButton(
-                        onClick = onCloseClick,
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer,
-                            contentColor = MaterialTheme.colorScheme.onErrorContainer
-                        ),
-                        shapes = IconButtonDefaults.shapes()
-                    ) {
-                        Icon(
-                            Icons.Default.Close,
-                            contentDescription = "Close Tab",
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
+    Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+        Spacer(Modifier.width(10.dp))
+        Card(
+            modifier = Modifier
+                .fillMaxSize()
+                .weight(1f)
+                .clickable {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onTabClick()
                 }
+                .shadow(elevation = elevation, shape = RoundedCornerShape(16.dp)),
+            border = BorderStroke(2.dp, borderColor),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = tab.title,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                color = if (isSelected)
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                else MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = tab.url,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (isSelected)
+                                    MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
 
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                ) {
+                        FilledTonalIconButton(
+                            onClick = onRefreshClick,
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            ),
+                            shapes = IconButtonDefaults.shapes()
+                        ) {
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription = "Refresh Tab",
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        FilledTonalIconButton(
+                            onClick = onCloseClick,
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer,
+                                contentColor = MaterialTheme.colorScheme.onErrorContainer
+                            ),
+                            shapes = IconButtonDefaults.shapes()
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Close Tab",
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                    ) {
                         tab.geckoSession?.let { session ->
                             AndroidView(
                                 factory = { context ->
@@ -708,48 +722,20 @@ fun TabCard(
                             )
                         }
 
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = tab.isLoading,
-                        enter = scaleIn(animationSpec = tween(200)) + fadeIn(),
-                        exit = scaleOut(animationSpec = tween(200)) + fadeOut(),
-                        modifier = Modifier.align(Alignment.Center)
-                    ) {
-                        ContainedLoadingIndicator(
-                            modifier = Modifier.align(Alignment.Center),
-                        )
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = tab.isLoading,
+                            enter = scaleIn(animationSpec = tween(200)) + fadeIn(),
+                            exit = scaleOut(animationSpec = tween(200)) + fadeOut(),
+                            modifier = Modifier.align(Alignment.Center)
+                        ) {
+                            ContainedLoadingIndicator(
+                                modifier = Modifier.align(Alignment.Center),
+                            )
+                        }
                     }
                 }
             }
         }
-    }
-}
-
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-fun IconButton(
-    onClick: () -> Unit,
-    icon: ImageVector,
-    contentDescription: String,
-    modifier: Modifier = Modifier
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val haptic = LocalHapticFeedback.current
-
-    FilledIconButton(
-        shapes = IconButtonDefaults.shapes(),
-        onClick = {
-            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-            onClick()
-        },
-        modifier = modifier,
-        interactionSource = interactionSource
-    ) {
-        Icon(
-            icon,
-            contentDescription = contentDescription,
-            modifier = Modifier.size(20.dp)
-        )
     }
 }
 
@@ -768,8 +754,7 @@ fun NewTabBottomSheet(
     homePage: String,
     searchEngine: String,
 ) {
-    var urlText by remember { mutableStateOf(currentUrl) }
-
+    var urlText by remember { if (currentUrl != homePage && currentUrl != "${homePage}/") { mutableStateOf(currentUrl) } else { mutableStateOf("") } }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -985,17 +970,16 @@ fun BrowserBottomBar(
     }
 }
 
+@SuppressLint("UseKtx")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsPage(
     onBackClick: () -> Unit,
-    onHomepageClick: () -> Unit,
-    onSearchClick: () -> Unit,
     onDownloadsClick: () -> Unit,
     onUpdateClick: () -> Unit,
     onAboutClick: () -> Unit,
-    homePage: String,
 ) {
+    val context = LocalContext.current
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val middleShape = RoundedCornerShape(4.dp)
     val bottomShape = RoundedCornerShape(
@@ -1004,7 +988,24 @@ fun SettingsPage(
         bottomStart = 24.dp,
         bottomEnd = 24.dp
     )
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
+    val prefs = remember {
+        context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+    }
+    val homepage by remember {
+        mutableStateOf(prefs.getString("home", "https://google.com") ?: "https://google.com")
+    }
+    val searchengine by remember {
+        mutableStateOf(prefs.getString("search", "https://google.com/search?q=%s") ?: "https://google.com/search?q=%s")
+    }
+    var input by remember { mutableStateOf("") }
+    var whatToInput by remember { mutableStateOf("") }
+    var onInput: () -> Unit = {}
+    var showDialog by remember { mutableStateOf(false) }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         modifier = Modifier
             .fillMaxSize()
             .nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -1040,14 +1041,28 @@ fun SettingsPage(
                     SettingsItem(
                         icon = Icons.Default.Home,
                         title = "Homepage",
-                        subtitle = homePage,
-                        onClick = onHomepageClick
+                        subtitle = homepage,
+                        onClick = {
+                            input = homepage
+                            whatToInput = "Homepage"
+                            showDialog = true
+                            onInput = {
+                                prefs.edit() { putString("home", input) }
+                            }
+                        }
                     )
                     SettingsItem(
                         icon = Icons.Default.Search,
                         title = "Search Engine",
-                        subtitle = "Choose your default search provider",
-                        onClick = onSearchClick,
+                        subtitle = searchengine,
+                        onClick = {
+                            input = searchengine
+                            whatToInput = "Search Engine"
+                            showDialog = true
+                            onInput = {
+                                prefs.edit() { putString("search", input) }
+                            }
+                        },
                         shape = middleShape
                     )
                     SettingsItem(
@@ -1077,6 +1092,41 @@ fun SettingsPage(
                     )
                 }
             }
+        }
+        if (showDialog) {
+            AlertDialog(
+                onDismissRequest = { showDialog = false },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showDialog = false
+                        onInput()
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar(
+                                message = "Restart Aria to take effect."
+                            )
+                        }
+                    }) {
+                        Text("Save")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        showDialog = false
+                    }) {
+                        Text("Cancel")
+                    }
+                },
+                title = { Text(whatToInput) },
+                text = {
+                    OutlinedTextField(
+                        value = input,
+                        onValueChange = { input = it },
+                        label = { Text("URL") },
+                        singleLine = true
+                    )
+                },
+                properties = DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = false)
+            )
         }
     }
 }
@@ -1276,7 +1326,8 @@ fun AboutPage(
                 SettingsItem(icon = Icons.Default.Info, title = "Aria", subtitle = "A beautiful Android browser by The Better Internet", onClick = {})
                 SettingsItem(icon = Icons.Default.Update, title = "Version", subtitle = "v${getVersionName(LocalContext.current).replace("-nightly", " (Nightly Build)")}", onClick = {}, shape = middleShape)
                 SettingsItem(icon = Icons.Default.Numbers, title = "Version Code", subtitle = getVersionCode(LocalContext.current), onClick = {}, shape = middleShape)
-                SettingsItem(icon = Icons.Default.Code, title = "Github", subtitle = "https://github.com/TheBetterInternet/Aria", onClick = { val i: Intent = Intent(Intent.ACTION_VIEW); i.setData("https://github.com/TheBetterInternet/Aria".toUri()); context.startActivity(i) }, shape = middleShape)
+                SettingsItem(icon = Icons.Default.Code, title = "Source Code", subtitle = "Access Aria's source code to modify, learn or do anything with it", onClick = { val i: Intent = Intent(Intent.ACTION_VIEW); i.setData("https://github.com/TheBetterInternet/Aria".toUri()); context.startActivity(i) }, shape = middleShape)
+                SettingsItem(icon = Icons.Default.CarCrash, title = "Initiate crash", subtitle = "Crash Aria for testing purposes", onClick = { throw Exception("Crash Test") }, shape = bottomShape)
             }
         }
     }
