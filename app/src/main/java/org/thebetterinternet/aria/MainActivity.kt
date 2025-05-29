@@ -1,90 +1,78 @@
 package org.thebetterinternet.aria
-import android.animation.ObjectAnimator
 import android.annotation.SuppressLint
 import android.app.DownloadManager
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.util.Patterns
-import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import org.thebetterinternet.aria.ui.theme.*
-import androidx.compose.foundation.layout.*
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.graphics.Color
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material3.BottomSheetDefaults
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.input.ImeAction
-import org.mozilla.geckoview.GeckoRuntime
-import org.mozilla.geckoview.GeckoSession
-import org.mozilla.geckoview.GeckoView
-import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import kotlin.math.abs
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
-import kotlin.math.absoluteValue
-import androidx.fragment.app.Fragment
-import androidx.fragment.app.FragmentActivity
-import androidx.viewpager2.adapter.FragmentStateAdapter
-import androidx.viewpager2.widget.ViewPager2
-import androidx.fragment.app.FragmentManager
-import androidx.lifecycle.Lifecycle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.window.SplashScreen
 import androidx.activity.compose.BackHandler
-import androidx.activity.viewModels
+import androidx.activity.compose.setContent
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyItemScope
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.material3.TopAppBarDefaults.topAppBarColors
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.core.content.ContextCompat.getSystemService
-import kotlinx.coroutines.launch
-import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import org.mozilla.geckoview.WebResponse
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.net.toUri
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.fragment.app.Fragment
+import androidx.fragment.app.FragmentActivity
+import androidx.fragment.app.FragmentManager
+import androidx.lifecycle.Lifecycle
+import androidx.viewpager2.adapter.FragmentStateAdapter
+import androidx.viewpager2.widget.ViewPager2
+import kotlinx.coroutines.launch
+import org.mozilla.geckoview.GeckoRuntime
+import org.mozilla.geckoview.GeckoSession
+import org.mozilla.geckoview.GeckoView
+import org.mozilla.geckoview.WebResponse
+import org.thebetterinternet.aria.ui.theme.*
+import kotlin.math.abs
+import kotlin.math.absoluteValue
 
 data class BrowserTab(
     val id: String = java.util.UUID.randomUUID().toString(),
@@ -195,9 +183,12 @@ fun AriaBrowser(initialUrl: String?) {
     var showBottomSheet by remember { mutableStateOf(false) }
     var showTabManager by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    var showAbout by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val activity = context as? FragmentActivity ?: return
     val geckoRuntime = remember { App.getRuntime(context) }
+    val homePage = "https://google.com" // placeholder.
+    val searchEngine = "https://google.com/search?q=%s" // placeholder.
     geckoRuntime.settings.setExtensionsWebAPIEnabled(true)
     geckoRuntime.settings.setExtensionsProcessEnabled(true)
     geckoRuntime.settings.setAboutConfigEnabled(true)
@@ -209,7 +200,7 @@ fun AriaBrowser(initialUrl: String?) {
     val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) {
         if (tabs.isEmpty()) {
-            val url = initialUrl ?: "https://www.google.com"
+            val url = initialUrl ?: homePage
             val initialSession = GeckoSession().apply { open(geckoRuntime) }
             tabs = listOf(BrowserTab(geckoSession = initialSession, url = url))
         }
@@ -220,12 +211,28 @@ fun AriaBrowser(initialUrl: String?) {
     LaunchedEffect(currentSession) {
         currentSession?.let { session ->
             session.contentDelegate = object : GeckoSession.ContentDelegate {
+                override fun onCloseRequest(session: GeckoSession) {
+                    if (tabs.size > 1) {
+                        val newTabs = tabs.toMutableList()
+                        newTabs[currentTabIndex].geckoSession?.close()
+                        newTabs.removeAt(currentTabIndex)
+                        tabs = newTabs
+                        if (currentTabIndex > 0) {
+                            currentTabIndex--
+                        }
+                    }
+                }
                 override fun onExternalResponse(session: GeckoSession, response: WebResponse) {
                     if (!response.requestExternalApp) {
                         startDownload(context, response.uri, extractFilename(response) ?: "download")
-                        //TODO: show snackbar
+                        scope.launch { snackbarHostState.showSnackbar(message = "Downloading file...") }
                     } else {
-                        //TODO: open in external app
+                        val i = Intent(Intent.ACTION_VIEW)
+                        i.data = response.uri.toUri()
+                        i.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        if (i.resolveActivity(context.packageManager) != null) {
+                            context.startActivity(i)
+                        }
                     }
                 }
             }
@@ -460,6 +467,10 @@ fun AriaBrowser(initialUrl: String?) {
                     currentSession?.loadUri(url)
                     showBottomSheet = false
                 },
+                onSettings = {
+                    showBottomSheet = false
+                    showSettings = true
+                },
                 onNewTab = {
                     val newSession = GeckoSession().apply { open(geckoRuntime) }
                     tabs = tabs + BrowserTab(geckoSession = newSession)
@@ -471,21 +482,47 @@ fun AriaBrowser(initialUrl: String?) {
                         snackbarHostState.showSnackbar("Invalid link! Searching instead")
                     }
                     showBottomSheet = false
-                    currentSession?.loadUri("https://google.com/search?q=$url")
-                }
+                    currentSession?.loadUri(searchEngine.replaceFirst("%s", url))
+                },
+                homePage = homePage,
+                searchEngine = searchEngine
             )
         }
     }
 
-    if (showSettings) {
+        androidx.compose.animation.AnimatedVisibility(
+            visible = showSettings,
+            enter = slideInHorizontally(
+                initialOffsetX = { it },
+                animationSpec = tween(300, easing = EaseInOutCubic)
+            ) + fadeIn(animationSpec = tween(200)),
+            exit = slideOutHorizontally(
+                targetOffsetX = { it },
+                animationSpec = tween(300, easing = EaseInOutCubic)
+            ) + fadeOut(animationSpec = tween(200))
+        ) {
         SettingsPage(
             onBackClick = { showSettings = false },
-            onPrivacyClick = { /* Navigate to privacy settings */ },
-            onSecurityClick = { /* Navigate to security settings */ },
-            onGeneralClick = { /* Navigate to general settings */ },
-            onAdvancedClick = { /* Navigate to advanced settings */ },
-            onAboutClick = { /* Navigate to about page */ }
+            onHomepageClick = {},
+            onAboutClick = { showAbout = true },
+            onSearchClick = {},
+            onUpdateClick = {},
+            onDownloadsClick = {},
+            homePage = homePage
         )
+        }
+    androidx.compose.animation.AnimatedVisibility(
+        visible = showAbout,
+        enter = slideInHorizontally(
+            initialOffsetX = { it },
+            animationSpec = tween(300, easing = EaseInOutCubic)
+        ) + fadeIn(animationSpec = tween(200)),
+        exit = slideOutHorizontally(
+            targetOffsetX = { it },
+            animationSpec = tween(300, easing = EaseInOutCubic)
+        ) + fadeOut(animationSpec = tween(200))
+    ) {
+        AboutPage(onBackClick = { showAbout = false }, context = context)
     }
 }
 
@@ -726,7 +763,10 @@ fun NewTabBottomSheet(
     currentUrl: String,
     onNavigate: (String) -> Unit,
     onNewTab: () -> Unit,
-    onInvaildUrl: (String) -> Unit
+    onInvaildUrl: (String) -> Unit,
+    onSettings: () -> Unit,
+    homePage: String,
+    searchEngine: String,
 ) {
     var urlText by remember { mutableStateOf(currentUrl) }
 
@@ -789,26 +829,34 @@ fun NewTabBottomSheet(
         ) {
             QuickLink(
                 icon = Icons.Default.Home,
-                onClick = { onNavigate("https://www.google.com") },
-                modifier = Modifier.fillMaxWidth().weight(1f)
+                onClick = { onNavigate(homePage) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
             )
 
             QuickLink(
                 icon = Icons.Default.Favorite,
                 onClick = { },
-                modifier = Modifier.fillMaxWidth().weight(1f)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
             )
 
             QuickLink(
                 icon = Icons.Default.History,
                 onClick = { },
-                modifier = Modifier.fillMaxWidth().weight(1f)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
             )
 
             QuickLink(
                 icon = Icons.Default.Settings,
-                onClick = { },
-                modifier = Modifier.fillMaxWidth().weight(1f)
+                onClick = onSettings,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
             )
         }
     }
@@ -840,7 +888,7 @@ fun QuickLink(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun BrowserBottomBar(
     tabCount: Int,
@@ -870,6 +918,7 @@ fun BrowserBottomBar(
             Box {
                 FilledTonalIconButton(
                     onClick = onTabsClick,
+                    shapes = IconButtonDefaults.shapes(),
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant,
                         contentColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -918,12 +967,13 @@ fun BrowserBottomBar(
                 Icon(
                     if (!isSearch) Icons.Default.Add else Icons.Default.Search,
                     contentDescription = if (!isSearch) "New Tab" else "Search",
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(28.dp),
                 )
             }
 
             FilledTonalIconButton(
                 onClick = onSettingsClick,
+                shapes = IconButtonDefaults.shapes(),
                 colors = IconButtonDefaults.filledTonalIconButtonColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant,
                     contentColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -939,14 +989,21 @@ fun BrowserBottomBar(
 @Composable
 fun SettingsPage(
     onBackClick: () -> Unit,
-    onPrivacyClick: () -> Unit,
-    onSecurityClick: () -> Unit,
-    onGeneralClick: () -> Unit,
-    onAdvancedClick: () -> Unit,
-    onAboutClick: () -> Unit
+    onHomepageClick: () -> Unit,
+    onSearchClick: () -> Unit,
+    onDownloadsClick: () -> Unit,
+    onUpdateClick: () -> Unit,
+    onAboutClick: () -> Unit,
+    homePage: String,
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
-
+    val middleShape = RoundedCornerShape(4.dp)
+    val bottomShape = RoundedCornerShape(
+        topStart = 4.dp,
+        topEnd = 4.dp,
+        bottomStart = 24.dp,
+        bottomEnd = 24.dp
+    )
     Scaffold(
         modifier = Modifier
             .fillMaxSize()
@@ -968,9 +1025,7 @@ fun SettingsPage(
                     }
                 },
                 scrollBehavior = scrollBehavior,
-                colors = TopAppBarDefaults.largeTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
+                colors = topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
         }
     ) { paddingValues ->
@@ -985,71 +1040,22 @@ fun SettingsPage(
                     SettingsItem(
                         icon = Icons.Default.Home,
                         title = "Homepage",
-                        subtitle = "Set your default homepage",
-                        onClick = onGeneralClick
+                        subtitle = homePage,
+                        onClick = onHomepageClick
                     )
                     SettingsItem(
                         icon = Icons.Default.Search,
                         title = "Search Engine",
                         subtitle = "Choose your default search provider",
-                        onClick = onGeneralClick
+                        onClick = onSearchClick,
+                        shape = middleShape
                     )
                     SettingsItem(
                         icon = Icons.Default.Download,
                         title = "Downloads",
-                        subtitle = "Manage download location and behavior",
-                        onClick = onGeneralClick
-                    )
-                }
-            }
-
-            item {
-                SettingsSection(title = "Privacy & Security") {
-                    SettingsItem(
-                        icon = Icons.Default.Shield,
-                        title = "Privacy Settings",
-                        subtitle = "Control data collection and tracking",
-                        onClick = onPrivacyClick
-                    )
-                    SettingsItem(
-                        icon = Icons.Default.Security,
-                        title = "Security",
-                        subtitle = "Manage passwords and security features",
-                        onClick = onSecurityClick
-                    )
-                    SettingsItem(
-                        icon = Icons.Default.Cookie,
-                        title = "Cookies & Site Data",
-                        subtitle = "Manage website data and permissions",
-                        onClick = onPrivacyClick
-                    )
-                }
-            }
-
-            item {
-                SettingsSection(title = "Appearance") {
-                    SettingsItem(
-                        icon = Icons.Default.Palette,
-                        title = "Theme",
-                        subtitle = "Light, Dark, or System default",
-                        onClick = onGeneralClick
-                    )
-                }
-            }
-
-            item {
-                SettingsSection(title = "Advanced") {
-                    SettingsItem(
-                        icon = Icons.Default.Storage,
-                        title = "Site Settings",
-                        subtitle = "Permissions for individual websites",
-                        onClick = onAdvancedClick
-                    )
-                    SettingsItem(
-                        icon = Icons.Default.NetworkCheck,
-                        title = "Network Settings",
-                        subtitle = "Proxy and connection preferences",
-                        onClick = onAdvancedClick
+                        subtitle = "Coming soon!",
+                        onClick = onDownloadsClick,
+                        shape = bottomShape
                     )
                 }
             }
@@ -1066,7 +1072,8 @@ fun SettingsPage(
                         icon = Icons.Default.Update,
                         title = "Check for Updates",
                         subtitle = "Keep your browser up to date",
-                        onClick = onAboutClick
+                        onClick = onUpdateClick,
+                        shape = bottomShape
                     )
                 }
             }
@@ -1100,51 +1107,89 @@ fun SettingsItem(
     title: String,
     subtitle: String,
     onClick: () -> Unit,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    shape: RoundedCornerShape = RoundedCornerShape(
+        topStart = 24.dp,
+        topEnd = 24.dp,
+        bottomStart = 4.dp,
+        bottomEnd = 4.dp
+    )
 ) {
-    Surface(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = Modifier.fillMaxWidth()
+    val ripple = ripple(
+        bounded = true,
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 2.dp)
     ) {
-        Row(
+        Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .clickable(
+                    onClick = onClick,
+                    enabled = enabled,
+                    indication = ripple,
+                    interactionSource = remember { MutableInteractionSource() }
+                ),
+            shape = shape,
+            color = if (enabled)
+                MaterialTheme.colorScheme.surfaceContainer
+            else
+                MaterialTheme.colorScheme.surface.copy(alpha = 0.38f)
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant
-                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
-                modifier = Modifier.size(24.dp)
-            )
-
-            Spacer(modifier = Modifier.width(16.dp))
-
-            Column(
-                modifier = Modifier.weight(1f)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = if (enabled) MaterialTheme.colorScheme.onSurface
-                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                )
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant
-                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                )
+                Box(
+                    modifier = Modifier
+                        .size(55.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant
+                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(20.dp))
+
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = title,
+                        color = if (enabled) MaterialTheme.colorScheme.onSurface
+                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                    Text(
+                        text = subtitle,
+                        color = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant
+                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                        fontSize = 16.sp
+                    )
+                }
             }
         }
     }
 }
 
+
 private fun startDownload(context: Context, url: String, filename: String) {
-    val request = DownloadManager.Request(Uri.parse(url))
+    val request = DownloadManager.Request(url.toUri())
         .setTitle(filename)
         .setDescription("Downloading file...")
         .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
@@ -1179,5 +1224,93 @@ private fun extractFilenameFromUrl(url: String): String {
         }
     } catch (e: Exception) {
         "download_${System.currentTimeMillis()}"
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AboutPage(
+    onBackClick: () -> Unit,
+    context: Context
+) {
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    val middleShape = RoundedCornerShape(4.dp)
+    val bottomShape = RoundedCornerShape(
+        topStart = 4.dp,
+        topEnd = 4.dp,
+        bottomStart = 24.dp,
+        bottomEnd = 24.dp
+    )
+    Scaffold(
+        modifier = Modifier
+            .fillMaxSize()
+            .nestedScroll(scrollBehavior.nestedScrollConnection),
+        topBar = {
+            LargeTopAppBar(
+                title = {
+                    Text(
+                        text = "About",
+                        style = MaterialTheme.typography.headlineMedium
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBackClick) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back"
+                        )
+                    }
+                },
+                scrollBehavior = scrollBehavior,
+                colors = topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+            )
+        }
+    ) { paddingValues ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues),
+            contentPadding = PaddingValues(vertical = 8.dp)
+        ) {
+            item {
+                SettingsItem(icon = Icons.Default.Info, title = "Aria", subtitle = "A beautiful Android browser by The Better Internet", onClick = {})
+                SettingsItem(icon = Icons.Default.Update, title = "Version", subtitle = "v${getVersionName(LocalContext.current).replace("-nightly", " (Nightly Build)")}", onClick = {}, shape = middleShape)
+                SettingsItem(icon = Icons.Default.Numbers, title = "Version Code", subtitle = getVersionCode(LocalContext.current), onClick = {}, shape = middleShape)
+                SettingsItem(icon = Icons.Default.Code, title = "Github", subtitle = "https://github.com/TheBetterInternet/Aria", onClick = { val i: Intent = Intent(Intent.ACTION_VIEW); i.setData("https://github.com/TheBetterInternet/Aria".toUri()); context.startActivity(i) }, shape = middleShape)
+            }
+        }
+    }
+}
+
+fun getVersionName(context: Context): String {
+    return try {
+        val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.packageManager.getPackageInfo(
+                context.packageName,
+                PackageManager.PackageInfoFlags.of(0)
+            )
+        } else {
+            context.packageManager.getPackageInfo(context.packageName, 0)
+        }
+        packageInfo.versionName ?: "Unknown"
+    } catch (e: Exception) {
+        "Unknown"
+    }
+}
+
+@Suppress("DEPRECATION")
+fun getVersionCode(context: Context): String {
+    return try {
+        val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.packageManager.getPackageInfo(
+                context.packageName,
+                PackageManager.PackageInfoFlags.of(0)
+            )
+        } else {
+            context.packageManager.getPackageInfo(context.packageName, 0)
+        }
+        "${packageInfo.versionCode}" ?: "Unknown" // because API 21 cant do packageInfo.longVersionCode
+    } catch (e: PackageManager.NameNotFoundException) {
+        "Unknown"
     }
 }

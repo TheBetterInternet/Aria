@@ -20,10 +20,10 @@ android {
 
     defaultConfig {
         applicationId = "org.thebetterinternet.aria"
-        minSdk = 24
+        minSdk = 21 // android 5 support, not sure it will work
         targetSdk = 35
         versionCode = 1
-        versionName = "1.0"
+        versionName = "1.0.0-nightly"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
